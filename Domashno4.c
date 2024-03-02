@@ -17,31 +17,29 @@ char* readline(int fd) {
 
     if (NULL == nextLine) {
         close(fd);
-        err(6, "ERROR: allocating memory for the line was not successful.");
+        err(6, "ERROR: Allocating memory for the line was not successful.");
     }
 
-    while ((bytesRead = read(fd, buffer, BLOCK_SIZE)) > 0) {
+    while (0 < (bytesRead = read(fd, buffer, BLOCK_SIZE))) {
             for (int i = 0; i < bytesRead; ++i) {
-                char* temp = realloc(nextLine, lineLen + 2);
-                if (NULL == temp) {
-                    free(nextLine);
+                nextLine = realloc(nextLine, lineLen + 1);
+                if (NULL == nextLine) {
                     close(fd);
                     err(7, "ERROR: Reallocating memory for the line was not successful.");
                 }
-                nextLine = temp;
 
                 if ('\n' == buffer[i]) {
                     nextLine[lineLen] = '\0';
 
-                    if (i < bytesRead - 1) {
+                    if (i < (bytesRead - 1)) {
                         off_t offset = i - bytesRead + 1;
                         int status = lseek(fd, offset, SEEK_CUR);
-                            if(-1 == status){
-                                free(nextLine);
-                                close(fd);
-                                err(8, "ERROR: Setting the cursor at the right position was not successful.");
+                        if(-1 == status){
+                            free(nextLine);
+                            close(fd);
+                            err(8, "ERROR: Setting the cursor at the right position was not successful.");
 
-                            }
+                        }
                     }
 
                     return nextLine;
@@ -49,8 +47,7 @@ char* readline(int fd) {
 
                 nextLine[lineLen] = buffer[i];
                 lineLen++;
-
-        }
+            }
     }
 
     if (-1 == bytesRead) {
@@ -75,7 +72,6 @@ char** tokenize(char* line) {
         return NULL;
     }
     char** tokens = NULL;
-
     char* nextToken = strtok(lineCopy, " ");
 
     int index = 0;
@@ -110,6 +106,15 @@ char** tokenize(char* line) {
 
     size++;
     tokens = realloc(tokens, size * sizeof(char*));
+
+    if(NULL == tokens) {
+        free(lineCopy);
+        for(int i = 0; i < index; ++i) {
+            free(tokens[i]);
+        }
+        return NULL;
+    }
+
     tokens[index] = NULL;
 
     free(lineCopy);
@@ -119,11 +124,15 @@ char** tokenize(char* line) {
 
 int main(int argc, char* argv[]) {
     int fd = open(argv[1], O_RDONLY);
+
     if(-1 == fd) {
         err(1, "ERROR: Opening the file was not successful.");
     }
+
     char* line = NULL;
+
     while(NULL != (line = readline(fd))) {
+
         char** tokens = tokenize(line);
         if(NULL == tokens) {
             free(line);
@@ -132,6 +141,7 @@ int main(int argc, char* argv[]) {
         }
 
         int childPid = fork();
+
         if(-1 == childPid) {
             free(line);
             for(int i = 0; NULL != tokens[i]; ++i) {
@@ -141,6 +151,7 @@ int main(int argc, char* argv[]) {
             close(fd);
             err(3, "ERROR: Forking was not successful.");
         }
+
         if(0 == childPid) {
             if(-1 == execvp(tokens[0], tokens)) {
                 free(line);
@@ -153,7 +164,9 @@ int main(int argc, char* argv[]) {
             }
             exit(0);
         }
+
         int status;
+
         if(-1 == wait(&status)) {
             free(line);
             for(int i = 0; NULL != tokens[i]; ++i) {
@@ -163,20 +176,22 @@ int main(int argc, char* argv[]) {
             close(fd);
             err(5, "ERROR: Waiting was not successful.");
         }
+
         if(WIFEXITED(status)) {
             int exitStatus = WEXITSTATUS(status);
             printf("%s exited with exit status: %d\n", tokens[0], exitStatus);
+        } else {
+            printf("%s was terminated by another process.\n", tokens[0]);
         }
 
+        free(line);
         for(int i = 0; NULL != tokens[i]; ++i) {
             free(tokens[i]);
         }
         free(tokens);
-        free(line);
     }
 
     close(fd);
     exit(0);
 }
-
 
