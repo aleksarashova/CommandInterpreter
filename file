@@ -1,0 +1,5 @@
+touch file
+stat file
+ls -l -a file
+cat file
+false
